@@ -22,7 +22,7 @@ void dump_regs(const CPU& cpu) {
               << " C:" << cpu.f.c << '\n';
 }
 
-static std::size_t op_size(Op op) {
+std::size_t op_size(Op op) {
     switch (op) {
     case Op::LoadIA:
     case Op::LoadIB:

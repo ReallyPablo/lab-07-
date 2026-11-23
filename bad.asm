@@ -1,0 +1,1 @@
+LOADI A, 0xGG

@@ -3,6 +3,11 @@
 #include <string>
 #include <cstdint>
 #include <algorithm>
+#include <fstream>
+#include <iomanip>
+#include <vector>
+#include "asm/assembler.hpp"
+#include "asm/lexer.hpp"
 #include "cpu.hpp"
 #include "display.hpp"
 #include "dump.hpp"
@@ -32,6 +37,84 @@ static void print_help() {
               << "  quit              leave\n";
 }
 
+static bool read_file(const std::string& path, std::string& text) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    std::ostringstream buf;
+    buf << in.rdbuf();
+    text = buf.str();
+    return true;
+}
+
+static bool build(const std::string& path, std::vector<Byte>& bytes) {
+    std::string text, error;
+    if (!read_file(path, text)) {
+        std::cerr << "error: cannot read " << path << '\n';
+        return false;
+    }
+    Token* tokens = lex(text, error);
+    if (!tokens) {
+        std::cerr << path << ": " << error << '\n';
+        return false;
+    }
+    bool ok = assemble(tokens, bytes, error);
+    destroy(tokens);
+    if (!ok) {
+        std::cerr << path << ": " << error << '\n';
+        return false;
+    }
+    return true;
+}
+
+static int cmd_lex(const std::string& path) {
+    std::string text, error;
+    if (!read_file(path, text)) {
+        std::cerr << "error: cannot read " << path << '\n';
+        return 1;
+    }
+    Token* tokens = lex(text, error);
+    if (!tokens) {
+        std::cerr << path << ": " << error << '\n';
+        return 1;
+    }
+    for (const Token* t = tokens; t; t = t->next) {
+        std::cout << std::setw(3) << t->line << "  " << kind_name(t->kind);
+        if (t->kind == Token::Kind::Ident || t->kind == Token::Kind::Number)
+            std::cout << '(' << t->text << ')';
+        std::cout << '\n';
+    }
+    destroy(tokens);
+    return 0;
+}
+
+static int cmd_asm(const std::string& path) {
+    std::vector<Byte> bytes;
+    if (!build(path, bytes)) return 1;
+    std::cout << "load 0x000";
+    for (Byte b : bytes)
+        std::cout << " 0x" << std::hex << std::setw(2) << std::setfill('0') << (int)b;
+    std::cout << std::dec << std::setfill(' ') << '\n' << bytes.size() << " bytes\n";
+    return 0;
+}
+
+static int cmd_run(const std::string& path) {
+    std::vector<Byte> bytes;
+    if (!build(path, bytes)) return 1;
+    Memory mem;
+    CPU cpu;
+    cpu.mem = &mem;
+    for (std::size_t i = 0; i < bytes.size(); ++i) mem_set(mem, i, bytes[i]);
+    run(cpu);
+    return 0;
+}
+
+static int usage() {
+    std::cerr << "usage: ember\n"
+                 "       ember file.asm\n"
+                 "       ember lex file.asm\n"
+                 "       ember asm file.asm\n";
+    return 2;
+}
 static Sprite sprites[8]{};
 
 static void tick(Memory& mem) {
@@ -50,9 +133,13 @@ static void tick(Memory& mem) {
     show(mem);
 }
 
-int main() {
-    Memory mem;
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "lex") return cmd_lex(argv[2]);
+    if (argc == 3 && std::string(argv[1]) == "asm") return cmd_asm(argv[2]);
+    if (argc == 2) return cmd_run(argv[1]);
+    if (argc != 1) return usage();
 
+    Memory mem;
     CPU cpu;
     cpu.mem = &mem;
 

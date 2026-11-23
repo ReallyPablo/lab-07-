@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include "memory.hpp"
 #include "stack.hpp"
@@ -37,6 +38,8 @@ struct Sprite {
     std::int8_t vx, vy;
     bool alive;
 };
+
+std::size_t op_size(Op op);
 
 void step(CPU& cpu);
 void run(CPU& cpu);
